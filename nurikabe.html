@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Nurikabe Solver - Tjaž Vračko</title>
+</head>
+<style>
+    td {
+        text-align: center;
+        vertical-align: middle;
+    }
+</style>
+
+<body>
+
+    <h1>Nurikabe solver</h1>
+    <p>Rows: <input type="text" id="input_rows"></p>
+    <p>Cols: <input type="text" id="input_cols"></p>
+    <button onclick="generate_grid()"> GENERATE GRID </button>
+
+    <table id="grid"></table>
+
+    <button id="solve_btn" onclick="solve_btn_click()"> SOLVE </button>
+
+    <table id="output_grid"></table>
+
+    <script src="nurikabe_strats.js"> </script>
+    <script src="tree.js"> </script>
+    <script src="index.js"> </script>
+
+</body>
+
+</html>
