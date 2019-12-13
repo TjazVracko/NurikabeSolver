@@ -259,33 +259,15 @@ class Nurikabe {
 
         // all islands must be continious within themselves
         for (var i = 0; i < this.islands.length; i++) {
-            var island = this.islands[i]
-            for (var j = 0; j < island.area.length; j++) {
-                var neigh = island.area[j].neighbours(this.input_matrix)
-                var c = 0
-                for (var k = 0; k < neigh.length; k++) {
-                    // if neighbour of island point is also an island point, it must be of the same island
-                    if (matrix[neigh[k].x][neigh[k].y] == solution_states.island && !island.is_in(neigh[k])) {
-                        return false
-                    }
-                    // at least 1 neighbour of island point must also be an island point from this island, unless island size is 1
-                    if (matrix[neigh[k].x][neigh[k].y] == solution_states.island && island.is_in(neigh[k])) {
-                        c += 1
-                    }
-                }
-                if (island.size == 1 && c != 0) {
-                    return false
-                }
-                else if (island.size > 1 && c == 0) {
-                    return false
-                }
+            if (!are_points_continious_area(this.islands[i].area, matrix)) {
+                return false
             }
         }
 
         // all islands must be sorounded by sea -> is checked above
 
         // the whole sea must be connected
-        if (!are_points_continious_area(this.sea.area, matrix)) {  // WARN: this modifies the matrix
+        if (!are_points_continious_area(this.sea.area, matrix)) {
             return false
         }
         // if all is good, is good
@@ -296,11 +278,12 @@ class Nurikabe {
 
 function are_points_continious_area(points, solution_matrix) {
     // set points in matrix to some number
+    var matrix = _.cloneDeep(solution_matrix)
     points.forEach(p => {
-        solution_matrix[p.x][p.y] = 1337
+        matrix[p.x][p.y] = 1337
     })
     // check if area is continious
-    return is_continious_area(1337, solution_matrix)
+    return is_continious_area(1337, matrix)
 }
 
 function is_continious_area(elem, matrix) {
@@ -340,6 +323,64 @@ function walk_the_matrix(point, elem, matrix) {
     })
 
 }
+
+// BFS implementation:
+// from https://stackoverflow.com/questions/55239386/finding-shortest-path-in-two-dimensional-array-javascript
+
+
+let successors = (root, m) => {
+    // only neighbours that are unknown (not sea or island)
+    let connectedCells = root.neighbours(m)
+
+    // const validCells = connectedCells.filter(
+    //     (cell) => (
+    //         cell[0] >= 0 && cell[0] < m.length
+    //         && cell[1] >= 0 && cell[1] < m[0].length)
+    // )
+
+    const successors = connectedCells.filter(
+        (cell) => (m[cell.x][cell.y] == solution_states.unknown)
+    )
+
+    return successors
+}
+
+const buildPath = (traversalTree, to) => {
+    let path = [to]
+    let parent = traversalTree[JSON.stringify(to)]
+    while (parent) {
+        path.push(parent)
+        parent = traversalTree[JSON.stringify(parent)]
+    }
+    return path.reverse()
+}
+
+const bfs = (matrix, from, to) => {
+    let traversalTree = []
+    let visited = new Sea()
+    let queue = []
+    queue.push(from)
+
+    while (queue.length) {
+        let subtreeRoot = queue.shift()
+        visited.add_point(subtreeRoot)
+
+        if (subtreeRoot.compare(to)) {
+            return buildPath(traversalTree, to)
+        }
+
+        for (child of successors(subtreeRoot, matrix)) {
+            // for (child of subtreeRoot.neighbours(matrix)) {
+            if (!visited.is_in(child)) {
+                traversalTree[JSON.stringify(child)] = subtreeRoot
+                queue.push(child)
+            }
+        }
+    }
+}
+
+
+// console.log(bfs([0, 0], [4, 4]).length) // => 13
 
 
 
@@ -503,6 +544,7 @@ Some puzzles will require the location of "unreachables" — cells that cannot b
 being either too far away from all of them or blocked by other numbers. Such cells must be black.
 Often, these cells will have only one route of connection to other black cells or will form an elbow
 whose required white cell (see previous bullet) can only reach one number, allowing further progress.
+
 */
 
 function check_for_unreachable_sea_cells(nurikabe) {
@@ -520,9 +562,10 @@ function check_for_unreachable_sea_cells(nurikabe) {
                 // for each island that is not complete
                 var viable_islands = new Array()
                 nurikabe.islands.filter(island => !island.is_complete()).forEach(island => {
-                    // check distance from closest cell of the island to this cell.
+                    // check distance from closest cell of the island to this cell using shortes path over "unknown" cells
                     var closest = island.closest_island_cell_to_point(current_point)
-                    var dist = closest.distance(current_point)
+                    // var dist = closest.distance(current_point)
+                    var dist = bfs(matrix, current_point, closest).length - 1
                     // this distance must be larger then ISLAND_SIZE - ISLAND_AREA_LEN to be outside.
                     if (dist <= island.size - island.area.length) {
                         viable_islands.push(island)
@@ -534,13 +577,7 @@ function check_for_unreachable_sea_cells(nurikabe) {
                     change = true
                     // matrix = nurikabe.create_solution_matrix()  // update matrix to see change
                 }
-                // NOTE: THIS IS NOT TRUE for unknown cells, but it is true for unasigned island cells (see above function)
-                // else if (viable_islands.length == 1) {
-                //     // must be of this island
-                //     viable_islands[0].add_point(current_point)
-                //     change = true
-                //     matrix = nurikabe.create_solution_matrix()  // update matrix to see change
-                // }
+
 
             }
         }
@@ -590,7 +627,7 @@ function all_neighbours_are_same(nurikabe) {
                     var unasigned_c = neigh_islands.filter(n => nurikabe.unasigned_island_points.is_in(n)).length
 
                     // how many others are the same?
-                    var others = neigh_islands.filter(n => !nurikabe.unasigned_island_points.is_in(n))  // TODO: find error here, something is wrong
+                    var others = neigh_islands.filter(n => !nurikabe.unasigned_island_points.is_in(n))
                     var others_c = others.filter(n => n == others[0]).length  // filter for the same island as the first one
 
                     if (others_c + unasigned_c == neighs.length) {
@@ -640,4 +677,60 @@ function island_spread(nurikabe) {
 TODO: All black cells must eventually be connected. If there is a black region with only one possible way to connect to the rest of the board,
 the sole connecting pathway must be black.
 
+If there is more that 1 black region, each black region that can spread in only 1 direction must spread in that direction.
 */
+
+function sea_spread(nurikabe) {
+    var change = false
+
+    var matrix = nurikabe.create_solution_matrix()
+    if (are_points_continious_area(nurikabe.sea.area, matrix)) {
+        // if the sea is one area, we can not know if it must spread further
+    }
+    else {
+        // start at some area of the sea
+        var solution_matrix = nurikabe.create_solution_matrix()  // this one stays unmodified
+        var starting_point = find_an_elem(solution_states.sea, matrix)
+
+        do {
+            // find all connected sea points
+            var area_neighbours = new Array()
+            recursive_neigh_search(starting_point, solution_states.sea, matrix, area_neighbours)  // matrix is modified with each call
+            area_neighbours = uniqBy(area_neighbours, JSON.stringify)   // only unique points:
+
+            // keep only unknows points
+            area_neighbours = area_neighbours.filter(n => solution_matrix[n.x][n.y] == solution_states.unknown)
+
+            // if sea can spred in only 1 dir, spread
+            if (area_neighbours.length == 1) {
+                nurikabe.sea.add_point(area_neighbours[0])
+                change = true
+            }
+
+            // go to next sea area
+            starting_point = find_an_elem(solution_states.sea, matrix)
+        } while (starting_point != null)
+
+
+    }
+
+    return change
+}
+
+function recursive_neigh_search(point, elem, matrix, arr) {
+    // Clear current point and move to adjacent cells that are "elem"
+    // check if this is a valid cell to work on:
+    if (matrix[point.x][point.y] != elem) {
+        arr.push(point)
+        return // nothing to do here, terminate this recursion branch
+    }
+
+    // clear this cell:
+    matrix[point.x][point.y] = -1
+    // recurse to all neighbours:
+    var neigh = point.neighbours(matrix)
+    neigh.forEach(n => {
+        recursive_neigh_search(n, elem, matrix, arr)
+    })
+
+}
