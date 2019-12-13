@@ -29,10 +29,21 @@ function solve_btn_click() {
 
     console.log("SOLVING START")
 
+    var t0 = performance.now();
     solution = solve_nurikabe(nurikabe_matrix);
+    var t1 = performance.now();
+    var seconds_it_took = (t1 - t0) / 1000
+
     console.log("SOLUTION")
     console.log(solution)
-    generate_output_grid(nurikabe_matrix, solution)
+
+    if (solution != null) {
+        generate_output_grid(nurikabe_matrix, solution)
+        document.getElementById("time_p").innerHTML = "Solving took " + seconds_it_took.toFixed(3) + " seconds."
+    }
+    else {
+        document.getElementById("time_p").innerHTML = "No solution found"
+    }
 
 }
 
@@ -96,17 +107,49 @@ function solve_nurikabe(nurikabe_matrix) {
     console.log("nurikabe")
     console.log(nurikabe)
     var tree = new Tree(nurikabe)
-
-    // Iterate over solving strategies until no more progress is made
     var current_node = tree.root
+
     do {
-        change = try_solving_strategies(tree.root.nurikabe)
-    } while (change)
+        // Iterate over solving strategies until no more progress is made
+        do {
+            change = try_solving_strategies(current_node.nurikabe)
+        } while (change)
 
-    // when no more changes are possible, construct new child node with a random guess added to the solution_matrix
+        // if solution is found, exit
+        if (current_node.nurikabe.is_valid()) {
+            break
+        }
 
-    // bla bla
-    solution_node = tree.root  // find node with solution to puzzle
+        // if not valid, and not full (there are unknown fiels left), construct new child node with a random guess added to the solution_matrix
+        if (!current_node.nurikabe.is_full()) {
+            // add next possible guess and create child
+            current_node = current_node.add_child_with_guess()
+        }
+        // if matrix is full and not valid, move up the tree and contuniue from there with new guesses
+        else {
+            var p_node = current_node
+            do {
+                p_node = p_node.parent
+                if (p_node == null) {
+                    // we went up to the root and exhaused all guesses - aka no solution is possible:
+                    console.log("ALL POSIBILITIES EXHAUSTED")
+                    console.log(tree.root)
+
+                    return null
+                }
+                var child_node = p_node.add_child_with_guess()
+            } while (child_node == null)  // this moves up all nodes that have exhausted their guesses.
+            current_node = child_node
+        }
+
+        // generate_output_grid(current_node.nurikabe.input_matrix, current_node.nurikabe.create_solution_matrix())
+
+    } while (!current_node.nurikabe.is_valid())  // until a valid solution is found
+
+
+    solution_node = current_node
+    console.log("IS SOLUTION GOOD?")
+    console.log(solution_node.nurikabe.is_valid())
     solution_matrix = solution_node.nurikabe.create_solution_matrix()
     console.log(solution_node.nurikabe)
     return solution_matrix
@@ -116,21 +159,27 @@ function solve_nurikabe(nurikabe_matrix) {
 
 function try_solving_strategies(nurikabe) {
     // call each solving strat once:
-    // var r1 = strat_test(nurikabe)  // each strat returns true if it changed something, false otherwise
-    // var r2 = strat_test2(nurikabe)
     var r1 = black_around_complete_islands(nurikabe)
+    // generate_output_grid(nurikabe.input_matrix, nurikabe.create_solution_matrix())
+
     var r2 = black_between_partial_islands(nurikabe)
+    // generate_output_grid(nurikabe.input_matrix, nurikabe.create_solution_matrix())
+
     var r3 = black_L_means_white_inside(nurikabe)
+    // generate_output_grid(nurikabe.input_matrix, nurikabe.create_solution_matrix())
+
     var r4 = add_unasigned_island_points_to_islands(nurikabe)
+    // generate_output_grid(nurikabe.input_matrix, nurikabe.create_solution_matrix())
+
     var r5 = check_for_unreachable_sea_cells(nurikabe)
+    // generate_output_grid(nurikabe.input_matrix, nurikabe.create_solution_matrix())
 
-    return r1 || r2 || r3 || r4 || r5 // ...
-}
+    var r6 = all_neighbours_are_same(nurikabe)
+    // generate_output_grid(nurikabe.input_matrix, nurikabe.create_solution_matrix())
 
-function array_copy(arr) {
-    var newArray = currentArray.map(function (arr) {
-        return arr.slice();
-    });
-    return newArray
+    var r7 = island_spread(nurikabe)
+    // generate_output_grid(nurikabe.input_matrix, nurikabe.create_solution_matrix())
+
+    return r1 || r2 || r3 || r4 || r5 || r6 || r7 // ...
 }
 

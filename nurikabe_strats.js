@@ -61,6 +61,13 @@ class Point {
 
 }
 
+function uniqBy(a, key) {
+    var seen = {};
+    return a.filter(function (item) {
+        var k = key(item);
+        return seen.hasOwnProperty(k) ? false : (seen[k] = true);
+    })
+}
 class Island {
     constructor(origin_point, size) {
         this.size = size
@@ -99,6 +106,8 @@ class Island {
             })
 
         });
+        // filter same points
+        var adj = uniqBy(adj, JSON.stringify)
         return adj
     }
 
@@ -194,20 +203,147 @@ class Nurikabe {
         return this.sea.is_in(point)
     }
 
+    belongs_to(point) {
+        // returns what the point belongs to:
+        // nothing
+        // unasigned island points
+        // sea
+        // island
+        if (this.sea.is_in(point)) {
+            return this.sea
+        }
+
+        for (var i = 0; i < this.islands.length; i++) {
+            if (this.islands[i].is_in(point)) {
+                return this.islands[i]
+            }
+        }
+
+        if (this.unasigned_island_points.is_in(point)) {
+            return this.unasigned_island_points
+        }
+
+        return null
+    }
+
+    is_full() {
+        // is the whole solution_matrix filled in?
+        var matrix = this.create_solution_matrix()
+        for (var i = 0; i < matrix.length; i++) {
+            for (var j = 0; j < matrix[0].length; j++) {
+                if (matrix[i][j] == solution_states.unknown) {
+                    return false
+                }
+            }
+        }
+        return true
+    }
+
+    is_valid() {
+        // the whole board must be filled in
+        var matrix = this.create_solution_matrix()
+        for (var i = 0; i < matrix.length; i++) {
+            for (var j = 0; j < matrix[0].length; j++) {
+                if (matrix[i][j] == solution_states.unknown) {
+                    return false
+                }
+            }
+        }
+
+        // all islands must be of specified size
+        for (var i = 0; i < this.islands.length; i++) {
+            if (!this.islands[i].is_complete()) {
+                return false
+            }
+        }
+
+        // all islands must be continious within themselves
+        for (var i = 0; i < this.islands.length; i++) {
+            var island = this.islands[i]
+            for (var j = 0; j < island.area.length; j++) {
+                var neigh = island.area[j].neighbours(this.input_matrix)
+                var c = 0
+                for (var k = 0; k < neigh.length; k++) {
+                    // if neighbour of island point is also an island point, it must be of the same island
+                    if (matrix[neigh[k].x][neigh[k].y] == solution_states.island && !island.is_in(neigh[k])) {
+                        return false
+                    }
+                    // at least 1 neighbour of island point must also be an island point from this island, unless island size is 1
+                    if (matrix[neigh[k].x][neigh[k].y] == solution_states.island && island.is_in(neigh[k])) {
+                        c += 1
+                    }
+                }
+                if (island.size == 1 && c != 0) {
+                    return false
+                }
+                else if (island.size > 1 && c == 0) {
+                    return false
+                }
+            }
+        }
+
+        // all islands must be sorounded by sea -> is checked above
+
+        // the whole sea must be connected
+        if (!are_points_continious_area(this.sea.area, matrix)) {  // WARN: this modifies the matrix
+            return false
+        }
+        // if all is good, is good
+        return true
+    }
+
 }
+
+function are_points_continious_area(points, solution_matrix) {
+    // set points in matrix to some number
+    points.forEach(p => {
+        solution_matrix[p.x][p.y] = 1337
+    })
+    // check if area is continious
+    return is_continious_area(1337, solution_matrix)
+}
+
+function is_continious_area(elem, matrix) {
+    var starting_point = find_an_elem(elem, matrix)
+    walk_the_matrix(starting_point, elem, matrix)
+
+    if (find_an_elem(elem, matrix) != null) {
+        return false
+    }
+    return true
+}
+
+function find_an_elem(elem, matrix) {
+    for (var i = 0; i < matrix.length; i++) {
+        for (var j = 0; j < matrix[0].length; j++) {
+            if (matrix[i][j] == elem) {
+                return new Point(i, j)
+            }
+        }
+    }
+    return null
+}
+
+function walk_the_matrix(point, elem, matrix) {
+    // Clear current point and move to adjacent cells that are "elem"
+    // check if this is a valid cell to work on:
+    if (matrix[point.x][point.y] != elem) {
+        return // nothing to do here, terminate this recursion branch
+    }
+
+    // clear this cell:
+    matrix[point.x][point.y] = -1
+    // recurse to all neighbours:
+    var neigh = point.neighbours(matrix)
+    neigh.forEach(n => {
+        walk_the_matrix(n, elem, matrix)
+    })
+
+}
+
 
 
 // ----------------------------- SOLVING STRATEGIES
-function strat_test(nurikabe) {
-    nurikabe.islands[0].add_point(new Point(1, 1))
-    return false
-}
-
-function strat_test2(nurikabe) {
-    nurikabe.sea.add_point(new Point(2, 2))
-    return false
-}
-
 
 
 /*
@@ -360,18 +496,10 @@ function add_unasigned_island_points_to_islands(nurikabe) {
 }
 
 
-/*
-TODO: All black cells must eventually be connected. If there is a black region with only one possible way to connect to the rest of the board,
-the sole connecting pathway must be black.
-
-TODO: Corollary: there cannot be a continuous path, using either vertical, horizontal or diagonal steps,
-of white cells from one cell lying on the edge of the board to a different cell like that, that encloses some black cells inside,
-because otherwise, the black cells won't be connected.
-*/
 
 
 /*
-TODO: Some puzzles will require the location of "unreachables" — cells that cannot be connected to any number,
+Some puzzles will require the location of "unreachables" — cells that cannot be connected to any number,
 being either too far away from all of them or blocked by other numbers. Such cells must be black.
 Often, these cells will have only one route of connection to other black cells or will form an elbow
 whose required white cell (see previous bullet) can only reach one number, allowing further progress.
@@ -385,13 +513,13 @@ function check_for_unreachable_sea_cells(nurikabe) {
     // if no islands are close enough, this cell is sea
 
     // for each cell
-    for (var i = 0; i < matrix.length - 1; i++) {
-        for (var j = 0; j < matrix[0].length - 1; j++) {
+    for (var i = 0; i < matrix.length; i++) {
+        for (var j = 0; j < matrix[0].length; j++) {
             if (matrix[i][j] == solution_states.unknown) {
                 var current_point = new Point(i, j)
-                // for each island
+                // for each island that is not complete
                 var viable_islands = new Array()
-                nurikabe.islands.forEach(island => {
+                nurikabe.islands.filter(island => !island.is_complete()).forEach(island => {
                     // check distance from closest cell of the island to this cell.
                     var closest = island.closest_island_cell_to_point(current_point)
                     var dist = closest.distance(current_point)
@@ -421,3 +549,95 @@ function check_for_unreachable_sea_cells(nurikabe) {
 
     return change
 }
+
+
+/*
+If all neighbours of an unknown cell are sea, this cell must also be sea.
+If all neighbours of an unknown cell are of the same island, this cell must also be of that island.
+*/
+
+function all_neighbours_are_same(nurikabe) {
+    var change = false
+    var matrix = nurikabe.create_solution_matrix()  // current matrix
+
+    for (var i = 0; i < matrix.length; i++) {
+        for (var j = 0; j < matrix[0].length; j++) {
+            if (matrix[i][j] == solution_states.unknown) {
+                var current_point = new Point(i, j)
+                var neighs = current_point.neighbours(nurikabe.input_matrix)
+
+                var sea_count = 0
+                var neigh_islands = new Array()
+                neighs.forEach(n => {
+                    if (matrix[n.x][n.y] == solution_states.sea) {
+                        sea_count++
+                    }
+
+                    if (matrix[n.x][n.y] == solution_states.island) {
+
+                        neigh_islands.push(nurikabe.belongs_to(n))
+                    }
+                })
+
+                if (sea_count == neighs.length) {
+                    nurikabe.sea.add_point(current_point)
+                    change = true
+                }
+                if (neigh_islands.length == neighs.length) {
+                    // if all neighbouring islands are the same island, or part of the "unasigned island", this point must be of that island
+
+                    // how many unasigned?
+                    var unasigned_c = neigh_islands.filter(n => nurikabe.unasigned_island_points.is_in(n)).length
+
+                    // how many others are the same?
+                    var others = neigh_islands.filter(n => !nurikabe.unasigned_island_points.is_in(n))  // TODO: find error here, something is wrong
+                    var others_c = others.filter(n => n == others[0]).length  // filter for the same island as the first one
+
+                    if (others_c + unasigned_c == neighs.length) {
+                        nurikabe.unasigned_island_points.add_point(current_point)
+                        change = true
+                    }
+                }
+            }
+
+        }
+    }
+
+
+    return change
+}
+
+/*
+if a non-complete island has only 1 neighbour that is unknown, the island must spread in that direction
+TODO: da spreadaš najprej od origina, potem pa od ostalih točk, maybe
+*/
+
+function island_spread(nurikabe) {
+    var change = false
+
+    var matrix = nurikabe.create_solution_matrix()  // current matrix
+
+    nurikabe.islands.forEach(island => {
+        var neighs = island.neighbours(nurikabe.input_matrix)
+        // filter unknown
+        var non_island_neighs = neighs.filter(p => matrix[p.x][p.y] == solution_states.unknown)
+
+        // some neighbours might be unknown, but are to far away from the origin to be part of this island
+        var usable_neighs = non_island_neighs.filter(p => p.distance(island.origin) < island.size)
+
+        if (usable_neighs.length == 1) {
+            island.add_point(usable_neighs[0])
+            change = true
+        }
+    })
+
+    return change
+}
+
+
+
+/*
+TODO: All black cells must eventually be connected. If there is a black region with only one possible way to connect to the rest of the board,
+the sole connecting pathway must be black.
+
+*/
