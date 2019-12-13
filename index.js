@@ -142,7 +142,7 @@ function solve_nurikabe(nurikabe_matrix) {
             current_node = child_node
         }
 
-        generate_output_grid(current_node.nurikabe.input_matrix, current_node.nurikabe.create_solution_matrix())
+        // generate_output_grid(current_node.nurikabe.input_matrix, current_node.nurikabe.create_solution_matrix())
 
     } while (!current_node.nurikabe.is_valid())  // until a valid solution is found
 
@@ -160,28 +160,28 @@ function solve_nurikabe(nurikabe_matrix) {
 function try_solving_strategies(nurikabe) {
     // call each solving strat once:
     var r1 = black_around_complete_islands(nurikabe)
-    generate_output_grid(nurikabe.input_matrix, nurikabe.create_solution_matrix())
+    // generate_output_grid(nurikabe.input_matrix, nurikabe.create_solution_matrix())
 
     var r2 = black_between_partial_islands(nurikabe)
-    generate_output_grid(nurikabe.input_matrix, nurikabe.create_solution_matrix())
+    // generate_output_grid(nurikabe.input_matrix, nurikabe.create_solution_matrix())
 
     var r3 = black_L_means_white_inside(nurikabe)
-    generate_output_grid(nurikabe.input_matrix, nurikabe.create_solution_matrix())
+    // generate_output_grid(nurikabe.input_matrix, nurikabe.create_solution_matrix())
 
     var r4 = add_unasigned_island_points_to_islands(nurikabe)
-    generate_output_grid(nurikabe.input_matrix, nurikabe.create_solution_matrix())
+    // generate_output_grid(nurikabe.input_matrix, nurikabe.create_solution_matrix())
 
     var r5 = check_for_unreachable_sea_cells(nurikabe)
-    generate_output_grid(nurikabe.input_matrix, nurikabe.create_solution_matrix())
+    // generate_output_grid(nurikabe.input_matrix, nurikabe.create_solution_matrix())
 
     var r6 = all_neighbours_are_same(nurikabe)
-    generate_output_grid(nurikabe.input_matrix, nurikabe.create_solution_matrix())
+    // generate_output_grid(nurikabe.input_matrix, nurikabe.create_solution_matrix())
 
     var r7 = island_spread(nurikabe)
-    generate_output_grid(nurikabe.input_matrix, nurikabe.create_solution_matrix())
+    // generate_output_grid(nurikabe.input_matrix, nurikabe.create_solution_matrix())
 
     var r8 = sea_spread(nurikabe)
-    generate_output_grid(nurikabe.input_matrix, nurikabe.create_solution_matrix())
+    // generate_output_grid(nurikabe.input_matrix, nurikabe.create_solution_matrix())
 
     return r1 || r2 || r3 || r4 || r5 || r6 || r7 || r8 // ...
 }

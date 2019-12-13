@@ -328,7 +328,7 @@ function walk_the_matrix(point, elem, matrix) {
 // from https://stackoverflow.com/questions/55239386/finding-shortest-path-in-two-dimensional-array-javascript
 
 
-let successors = (root, m) => {
+let successors = (root, m, to) => {
     // only neighbours that are unknown (not sea or island)
     let connectedCells = root.neighbours(m)
 
@@ -338,8 +338,9 @@ let successors = (root, m) => {
     //         && cell[1] >= 0 && cell[1] < m[0].length)
     // )
 
+    // valid next cells are unknown neghibours or the cell we are trying to reach
     const successors = connectedCells.filter(
-        (cell) => (m[cell.x][cell.y] == solution_states.unknown)
+        (cell) => (m[cell.x][cell.y] == solution_states.unknown || cell.compare(to))
     )
 
     return successors
@@ -360,23 +361,26 @@ const bfs = (matrix, from, to) => {
     let visited = new Sea()
     let queue = []
     queue.push(from)
+    visited.add_point(from)
 
     while (queue.length) {
         let subtreeRoot = queue.shift()
-        visited.add_point(subtreeRoot)
+
 
         if (subtreeRoot.compare(to)) {
             return buildPath(traversalTree, to)
         }
 
-        for (child of successors(subtreeRoot, matrix)) {
+        for (child of successors(subtreeRoot, matrix, to)) {
             // for (child of subtreeRoot.neighbours(matrix)) {
             if (!visited.is_in(child)) {
                 traversalTree[JSON.stringify(child)] = subtreeRoot
                 queue.push(child)
+                visited.add_point(child)  // is this ok?
             }
         }
     }
+    return null // if no path exists
 }
 
 
@@ -565,10 +569,18 @@ function check_for_unreachable_sea_cells(nurikabe) {
                     // check distance from closest cell of the island to this cell using shortes path over "unknown" cells
                     var closest = island.closest_island_cell_to_point(current_point)
                     // var dist = closest.distance(current_point)
-                    var dist = bfs(matrix, current_point, closest).length - 1
-                    // this distance must be larger then ISLAND_SIZE - ISLAND_AREA_LEN to be outside.
-                    if (dist <= island.size - island.area.length) {
-                        viable_islands.push(island)
+                    var shortest_path = bfs(matrix, current_point, closest)
+                    if (shortest_path != null) {
+                        var dist = shortest_path.length - 1
+                        // this distance must be larger then ISLAND_SIZE - (dist from closes point to origin) to be outside.
+                        // if (dist <= island.size - island.area.length) {
+                        var dist_island_point_to_origin = bfs(matrix, closest, island.origin)
+                        if (dist_island_point_to_origin != null) {
+                            if (dist <= island.size - dist_island_point_to_origin.length) {
+                                viable_islands.push(island)
+                            }
+                        }
+
                     }
                 })
                 if (viable_islands.length == 0) {
