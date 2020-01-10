@@ -20,6 +20,8 @@ function generate_grid() {
         }
     }
 
+    // reset state machine
+    current_state = States.INIT
 }
 
 function solve_btn_click() {
@@ -183,5 +185,160 @@ function try_solving_strategies(nurikabe) {
     var r8 = sea_spread(nurikabe)
     // generate_output_grid(nurikabe.input_matrix, nurikabe.create_solution_matrix())
 
-    return r1 || r2 || r3 || r4 || r5 || r6 || r7 || r8 // ...
+    var r9 = fill_sea_if_islands_are_complete(nurikabe)
+    // generate_output_grid(nurikabe.input_matrix, nurikabe.create_solution_matrix())
+
+    var r10 = connect_island_parts(nurikabe)
+    // generate_output_grid(nurikabe.input_matrix, nurikabe.create_solution_matrix())
+
+    return r1 || r2 || r3 || r4 || r5 || r6 || r7 || r8 || r9 || r10 // ...
+}
+
+
+// ------------------------------- STEP BY SPET FSM -------------------------------------
+
+States = {
+    INIT: 'Initialisation',
+    SOLVE_START: 'Go through solving strategies',
+    END: 'NO SOLUTION FOUND',
+    SOLUTION: 'SOLUTION FOUND',
+    black_around_complete_islands: 'Add black cells around complete islands',
+    black_between_partial_islands: 'Add black cells between partial islands',
+    black_L_means_white_inside: 'Black L shape means 4th cell is island',
+    add_unasigned_island_points_to_islands: 'Add unasigned white cells to islands',
+    check_for_unreachable_sea_cells: 'Check for unreachable sea cells',
+    all_neighbours_are_same: 'Check if all neighbours are the same',
+    island_spread: 'Spread islands',
+    sea_spread: 'Spread the sea',
+    fill_sea_if_islands_are_complete: 'FIll sea if all islands are complete',
+    connect_island_parts: 'Connect island parts',
+    STRATS_EXHAUSTED: 'ALL SOLVING STRATEGIES EXHAUSED',
+    ADD_GUESS: 'ADDING NODE TO TREE WITH RANDOM GUESS'
+}
+
+current_state = States.INIT
+
+function step_btn_click() {
+    console.log("LOADING MATRIX")
+    nurikabe_matrix = load_matrix();
+    // console.log(nurikabe_matrix)
+
+    if (current_state == States.END || current_state == States.SOLUTION) {
+        console.log("INIT STATE MACHINE")
+        current_state = States.INIT
+        console.log("SOLVING START")
+    }
+
+    solution = solve_nurikabe_state(nurikabe_matrix);
+
+    // console.log("SOLUTION")
+    console.log(solution)
+
+    if (solution != null) {
+        generate_output_grid(nurikabe_matrix, solution)
+    }
+    document.getElementById("time_p").innerHTML = current_state
+}
+
+
+function solve_nurikabe_state(nurikabe_matrix) {
+    if (current_state == States.INIT) {
+        // init tree (fill initial values into grid)
+        nurikabe = new Nurikabe(nurikabe_matrix)
+        console.log("nurikabe")
+        console.log(nurikabe)
+        tree = new Tree(nurikabe)
+        current_node = tree.root
+
+        current_state = States.SOLVE_START
+    }
+
+    else if (current_state == States.SOLVE_START) {
+        current_state = States.black_around_complete_islands
+    }
+
+    else if (current_state == States.black_around_complete_islands) {
+        r1 = black_around_complete_islands(current_node.nurikabe)
+        current_state = States.black_between_partial_islands
+    }
+    else if (current_state == States.black_between_partial_islands) {
+        r2 = black_between_partial_islands(current_node.nurikabe)
+        current_state = States.black_L_means_white_inside
+    }
+    else if (current_state == States.black_L_means_white_inside) {
+        r3 = black_L_means_white_inside(current_node.nurikabe)
+        current_state = States.add_unasigned_island_points_to_islands
+    }
+    else if (current_state == States.add_unasigned_island_points_to_islands) {
+        r4 = add_unasigned_island_points_to_islands(current_node.nurikabe)
+        current_state = States.check_for_unreachable_sea_cells
+    }
+    else if (current_state == States.check_for_unreachable_sea_cells) {
+        r5 = check_for_unreachable_sea_cells(current_node.nurikabe)
+        current_state = States.all_neighbours_are_same
+    }
+    else if (current_state == States.all_neighbours_are_same) {
+        r6 = all_neighbours_are_same(current_node.nurikabe)
+        current_state = States.island_spread
+    }
+    else if (current_state == States.island_spread) {
+        r7 = island_spread(current_node.nurikabe)
+        current_state = States.sea_spread
+    }
+    else if (current_state == States.sea_spread) {
+        r8 = sea_spread(current_node.nurikabe)
+        current_state = States.fill_sea_if_islands_are_complete
+    }
+    else if (current_state == States.fill_sea_if_islands_are_complete) {
+        r9 = fill_sea_if_islands_are_complete(current_node.nurikabe)
+        current_state = States.connect_island_parts
+    }
+    else if (current_state == States.connect_island_parts) {
+        r10 = connect_island_parts(current_node.nurikabe)
+        if (r1 || r2 || r3 || r4 || r5 || r6 || r7 || r8 || r9 || r10) {
+            // go through starts again
+            current_state = States.SOLVE_START
+        }
+        else {
+            current_state = States.STRATS_EXHAUSTED
+        }
+
+    }
+
+    else if (current_state == States.STRATS_EXHAUSTED) {
+        // if solution is found, exit
+        if (current_node.nurikabe.is_valid()) {
+            current_state = States.SOLUTION
+        }
+        else {
+            current_state = States.ADD_GUESS
+        }
+    }
+
+    else if (current_state == States.ADD_GUESS) {
+        if (!current_node.nurikabe.is_full()) {
+            // add next possible guess and create child
+            current_node = current_node.add_child_with_guess()
+        }
+        // if matrix is full and not valid, move up the tree and contuniue from there with new guesses
+        else {
+            var p_node = current_node
+            do {
+                p_node = p_node.parent
+                if (p_node == null) {
+                    // we went up to the root and exhaused all guesses - aka no solution is possible:
+                    console.log("ALL POSIBILITIES EXHAUSTED")
+                    console.log(tree.root)
+
+                    current_state = States.END
+                    return null
+                }
+                var child_node = p_node.add_child_with_guess()
+            } while (child_node == null)  // this moves up all nodes that have exhausted their guesses.
+            current_node = child_node
+        }
+        current_state = States.SOLVE_START
+    }
+    return current_node.nurikabe.create_solution_matrix()
+
 }
